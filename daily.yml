@@ -18,6 +18,9 @@ concurrency: vinya-outreach
 jobs:
   outreach:
     runs-on: ubuntu-latest
+           defaults:
+         run:
+           working-directory: vinya_outreach
     timeout-minutes: 120
     env:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
