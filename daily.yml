@@ -2,11 +2,11 @@ name: Vinya daily outreach
 
 on:
   schedule:
-    - cron: "30 14 * * 1-5"   # Monday-Friday, 10:30 AM Eastern (14:30 UTC)
+    - cron: "30 14 * * 1-5"
   workflow_dispatch:
     inputs:
       test_email:
-        description: "Send ONE test email to this address instead of the daily batch (leave blank for normal run)"
+        description: "Send ONE test email to this address (leave blank for normal run)"
         required: false
         default: ""
 
@@ -27,6 +27,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: List repository files
+        run: ls -la
 
       - name: Send one test email
         if: ${{ github.event.inputs.test_email != '' }}
