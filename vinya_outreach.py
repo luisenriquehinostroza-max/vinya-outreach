@@ -36,22 +36,25 @@ from pathlib import Path
 
 # ============================ CONFIGURATION ============================
 CONFIG = {
-    # Sending route. "gmail" = log in to Gmail and send as your verified alias.
-    # If mail-tester.com shows SPF/DKIM/DMARC failing or "via gmail.com",
-    # switch to "godaddy" and fill the godaddy_* values below.
-    "route": "gmail",
+    # Sending route:
+    #   "godaddy" (recommended) = send directly from luis@hinosinvestments.com, so the
+    #             message is authenticated (SPF/DKIM/DMARC) as your own domain.
+    #             Password comes from the EMAIL_PASSWORD secret.
+    #   "gmail"   = log in to Gmail and send as the alias (fails DMARC; not recommended).
+    #             Password comes from the GMAIL_APP_PASSWORD secret.
+    "route": "godaddy",
 
     "gmail_user": "luisenrique.hinostroza@gmail.com",
-    "gmail_smtp": ("smtp.gmail.com", 465),
-    "gmail_imap": "imap.gmail.com",
+    "gmail_smtp": [("smtp.gmail.com", 465)],
+    "gmail_imap": ["imap.gmail.com"],
+    "gmail_password_env": "GMAIL_APP_PASSWORD",
 
     "godaddy_user": "luis@hinosinvestments.com",
-    # Microsoft 365 from GoDaddy: ("smtp.office365.com", 587)
-    # GoDaddy Professional Email: ("smtpout.secureserver.net", 465)
-    "godaddy_smtp": ("smtpout.secureserver.net", 465),
-    "godaddy_imap": "imap.secureserver.net",
-
-    "password_env": "GMAIL_APP_PASSWORD",
+    # Tried in order; the first that accepts the login is used.
+    # GoDaddy Professional Email first, then Microsoft 365 (from GoDaddy).
+    "godaddy_smtp": [("smtpout.secureserver.net", 465), ("smtp.office365.com", 587)],
+    "godaddy_imap": ["imap.secureserver.net", "outlook.office365.com"],
+    "godaddy_password_env": "EMAIL_PASSWORD",
 
     "from_name": "Luis Hinostroza",
     "from_addr": "luis@hinosinvestments.com",
@@ -246,24 +249,48 @@ def build_message(c, subject, body):
 
 # ============================ CONNECTIONS ============================
 def creds():
-    pw = os.environ.get(CONFIG["password_env"])
-    if not pw:
-        sys.exit(f"Set the {CONFIG['password_env']} environment variable first (see README).")
     if CONFIG["route"] == "godaddy":
-        return CONFIG["godaddy_user"], pw, CONFIG["godaddy_smtp"], CONFIG["godaddy_imap"]
-    return CONFIG["gmail_user"], pw, CONFIG["gmail_smtp"], CONFIG["gmail_imap"]
+        env, user = CONFIG["godaddy_password_env"], CONFIG["godaddy_user"]
+        smtp, imap = CONFIG["godaddy_smtp"], CONFIG["godaddy_imap"]
+    else:
+        env, user = CONFIG["gmail_password_env"], CONFIG["gmail_user"]
+        smtp, imap = CONFIG["gmail_smtp"], CONFIG["gmail_imap"]
+    pw = (os.environ.get(env) or "").strip()
+    if not pw:
+        sys.exit(f"Set the {env} secret/environment variable first (see README).")
+    return user, pw, smtp, imap
 
 
 def smtp_connect():
-    user, pw, (host, port), _ = creds()
+    user, pw, hosts, _ = creds()
     ctx = ssl.create_default_context()
-    if port == 465:
-        s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=60)
-    else:
-        s = smtplib.SMTP(host, port, timeout=60)
-        s.starttls(context=ctx)
-    s.login(user, pw)
-    return s
+    errors = []
+    for host, port in hosts:
+        try:
+            if port == 465:
+                s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=60)
+            else:
+                s = smtplib.SMTP(host, port, timeout=60)
+                s.starttls(context=ctx)
+            s.login(user, pw)
+            print(f"Connected to {host}:{port} as {user}")
+            return s
+        except Exception as e:
+            errors.append(f"{host}:{port} -> {e}")
+    sys.exit("Could not log in to any mail server:\n  " + "\n  ".join(errors))
+
+
+def imap_connect():
+    user, pw, _, hosts = creds()
+    errors = []
+    for host in hosts:
+        try:
+            M = imaplib.IMAP4_SSL(host)
+            M.login(user, pw)
+            return M
+        except Exception as e:
+            errors.append(f"{host} -> {e}")
+    sys.exit("Could not log in to any IMAP server:\n  " + "\n  ".join(errors))
 
 
 # ============================ COMMANDS ============================
@@ -375,11 +402,9 @@ def _fresh_reply(text):
 
 
 def cmd_check_replies(args):
-    user, pw, _, imap_host = creds()
     targets = sent_emails()
     since = (date.today() - timedelta(days=args.days)).strftime("%d-%b-%Y")
-    M = imaplib.IMAP4_SSL(imap_host)
-    M.login(user, pw)
+    M = imap_connect()
     M.select("INBOX", readonly=True)
     _, data = M.search(None, f"(SINCE {since})")
     stops = bounces = replies = 0
