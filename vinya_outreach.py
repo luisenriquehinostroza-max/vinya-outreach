@@ -67,7 +67,7 @@ CONFIG = {
     "postal_address": "537 Hardwood Circle, Orlando, FL 32828",
 
     # Deliverability safeguards
-    "daily_cap": 15,
+    "daily_cap": 10,
     "min_delay_s": 90,        # random pause between emails
     "max_delay_s": 240,
     "weekdays_only": True,
