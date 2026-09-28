@@ -17,6 +17,7 @@ Live demo and data requirements:
 I'm looking for one producer to build the first version with, on-site, at no cost during the pilot phase. If you're already digital, Vinya sits on top of what you use. If not, setting up inventory, sales, and accounting in Odoo is part of the same process.
 
 If you're interested, just reply to this email, or call/text me at +1 (786) 332-1457.
+Even if the timing isn't right for you, a short reply telling me which of these problems you see in your operation would help me shape the pilot
 
 Best regards,
 Luis Hinostroza
