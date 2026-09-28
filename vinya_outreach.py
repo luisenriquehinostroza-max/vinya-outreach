@@ -88,6 +88,7 @@ TEMPLATE = BASE / "email_template.txt"
 SUBJECTS = BASE / "subjects.txt"
 SENT_LOG = BASE / "sent_log.csv"
 SUPPRESS = BASE / "suppression.csv"
+SAVED_SENT = BASE / "saved_to_sent.csv"
 PREVIEWS = BASE / "previews"
 
 
@@ -298,6 +299,89 @@ def imap_connect():
     sys.exit("Could not log in to any IMAP server:\n  " + "\n  ".join(errors))
 
 
+
+# ============================ SENT-FOLDER COPIES ============================
+def try_imap():
+    """Like imap_connect, but returns None instead of exiting on failure."""
+    try:
+        user, pw, _, hosts = creds()
+    except SystemExit:
+        return None
+    for host in hosts:
+        try:
+            M = imaplib.IMAP4_SSL(host)
+            M.login(user, pw)
+            return M
+        except Exception:
+            continue
+    return None
+
+
+def find_sent_folder(M):
+    try:
+        _, data = M.list()
+    except Exception:
+        return None
+    names = []
+    for raw in data or []:
+        line = raw.decode(errors="replace") if isinstance(raw, bytes) else str(raw)
+        m = re.match(r'\((?P<flags>[^)]*)\)\s+(?:"[^"]*"|NIL)\s+(?P<name>.+)$', line)
+        if not m:
+            continue
+        name = m.group("name").strip()
+        if "\\Sent" in m.group("flags"):
+            return name
+        names.append(name)
+    plain = {n.strip('"').lower(): n for n in names}
+    for cand in ["sent", "sent items", "inbox.sent", "sent messages", "inbox/sent"]:
+        if cand in plain:
+            return plain[cand]
+    return None
+
+
+def saved_ids():
+    return {r["message_id"] for r in read_csv(SAVED_SENT) if r.get("message_id")}
+
+
+def save_copy(M, folder, msg, when):
+    try:
+        mbox = folder if folder.startswith('"') else f'"{folder}"'
+        typ, _ = M.append(mbox, r"(\Seen)", imaplib.Time2Internaldate(when), msg.as_bytes())
+        if typ == "OK":
+            append_csv(SAVED_SENT, {"message_id": msg["Message-ID"]}, ["message_id"])
+            return True
+    except Exception as e:
+        print(f"      (could not save copy to Sent: {e})")
+    return False
+
+
+def backfill_sent(M, folder, template, subjects, contacts):
+    """Save copies of earlier sends that are not yet in the Sent folder."""
+    by_email = {c["email"]: c for c in contacts}
+    done = saved_ids()
+    n = 0
+    for r in sent_rows():
+        if r.get("status") != "sent" or r.get("message_id") in done:
+            continue
+        c = by_email.get(r["email"].lower())
+        if not c:
+            continue
+        subject, body = render(c, template, subjects)
+        msg = build_message(c, subject, body)
+        try:
+            ts = datetime.fromisoformat(r["timestamp"])
+        except Exception:
+            ts = datetime.now()
+        del msg["Date"]
+        msg["Date"] = formatdate(ts.timestamp(), localtime=True)
+        del msg["Message-ID"]
+        msg["Message-ID"] = r["message_id"]
+        if save_copy(M, folder, msg, ts.timestamp()):
+            n += 1
+    if n:
+        print(f"Saved {n} earlier email(s) to the Sent folder.")
+
+
 # ============================ COMMANDS ============================
 def cmd_preview(args):
     contacts, bad = load_contacts(args.contacts, args.state)
@@ -325,6 +409,19 @@ def cmd_send(args):
                  "(use --force to override).")
 
     contacts, bad = load_contacts(args.contacts, args.state)
+    template = TEMPLATE.read_text(encoding="utf-8")
+    subjects = [s for s in SUBJECTS.read_text(encoding="utf-8").splitlines() if s.strip()]
+
+    M = folder = None
+    if not args.dry_run:
+        M = try_imap()
+        folder = find_sent_folder(M) if M else None
+        if M and folder:
+            print(f"Copies will be saved to the '{folder.strip(chr(34))}' folder.")
+            backfill_sent(M, folder, template, subjects, contacts)
+        else:
+            print("Note: could not open the Sent folder; emails will still be sent.")
+
     queue, skipped = pending_queue(contacts, args.allow_same_domain)
     remaining = CONFIG["daily_cap"] - sent_today_count()
     if args.limit:
@@ -335,8 +432,6 @@ def cmd_send(args):
     if not queue:
         sys.exit("Nothing to send: every contact is already emailed or suppressed.")
 
-    template = TEMPLATE.read_text(encoding="utf-8")
-    subjects = [s for s in SUBJECTS.read_text(encoding="utf-8").splitlines() if s.strip()]
     print(f"{'DRY RUN - ' if args.dry_run else ''}Sending {len(queue)} email(s) "
           f"(cap {CONFIG['daily_cap']}/day, {sent_today_count()} already sent today)")
 
@@ -376,6 +471,8 @@ def cmd_send(args):
                               "email": c["email"], "business": c["business"], "state": c["state"],
                               "subject": subject, "status": status, "detail": detail,
                               "message_id": msg["Message-ID"]}, fields)
+        if status == "sent" and M and folder:
+            save_copy(M, folder, msg, time.time())
         print(f"  [{i}/{len(queue)}] {status}: {c['business']} <{c['email']}>")
 
         if i < len(queue) and not args.dry_run:
@@ -385,6 +482,11 @@ def cmd_send(args):
 
     if server:
         server.quit()
+    if M:
+        try:
+            M.logout()
+        except Exception:
+            pass
     print("Done.")
 
 
