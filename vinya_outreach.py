@@ -202,7 +202,12 @@ def personal_line(c):
 
 
 def render(c, template, subjects):
-    greeting = c["contact_name"] or f"{c['business']} team"
+    if c["contact_name"]:
+        greeting = c["contact_name"]
+    elif c["business"].lower().startswith("the "):
+        greeting = f"team at {c['business']}"
+    else:
+        greeting = f"{c['business']} team"
     reason = (f"You're receiving this because {c['business']} is listed as {c['source']}."
               if c["source"] else DEFAULT_REASON)
     body = template.format(

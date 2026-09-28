@@ -1,4 +1,4 @@
 Pilot partner for {business}?
 Catching spoilage earlier at {business}
-Question for the {business} operations team
+Question for the operations team at {business}
 {business}: early warnings before product is lost
