@@ -1,0 +1,30 @@
+Hi {greeting},
+
+I'm Luis Hinostroza — ERP consultant (20+ years, Six Sigma Black Belt) and founder of Hinos Investments LLC.
+
+I'm building Vinya, a platform built on Odoo ERP with machine-learning models that turn the harvest, inventory, and sales records you already keep into early warnings — so spoilage gets caught before it happens, not after.
+{personal_line}
+How it works:
+- Spoilage risk alerts: compares how long a batch has sat in a stage against its historical mean and standard deviation. Example: if a lot normally spends 4.1 days in cold storage (σ = 0.8), at day 6 it scores Z = 2.38 and gets flagged before it becomes a loss.
+- Harvest-to-market yield tracking
+- Demand-aligned production planning
+- Margins by product line
+
+Live demo and data requirements:
+- https://hinosinvestments.com/demo.html
+- https://hinosinvestments.com/data.html
+
+I'm looking for one producer to build the first version with, on-site, at no cost during the pilot phase. If you're already digital, Vinya sits on top of what you use. If not, setting up inventory, sales, and accounting in Odoo is part of the same process.
+
+If you're interested, just reply to this email, or call/text me at +1 (786) 332-1457.
+
+Best regards,
+Luis Hinostroza
+Founder, Hinos Investments LLC
+luis@hinosinvestments.com | hinosinvestments.com
+
+P.S. If I've reached the wrong person, I'd appreciate it if you could forward this to your operations or inventory lead.
+
+---
+Hinos Investments LLC · {postal_address}
+{footer_reason} If you'd rather not hear from me, reply "STOP" and I won't contact you again.
