@@ -42,7 +42,7 @@ jobs:
         continue-on-error: true
         run: python vinya_outreach.py check-replies
 
-      - name: Send today's batch (15)
+      - name: Send today's batch
         if: ${{ github.event.inputs.test_email == '' }}
         continue-on-error: true
         run: python vinya_outreach.py send
