@@ -472,7 +472,17 @@ def cmd_send(args):
                               "subject": subject, "status": status, "detail": detail,
                               "message_id": msg["Message-ID"]}, fields)
         if status == "sent" and M and folder:
-            save_copy(M, folder, msg, time.time())
+            # The server drops idle IMAP connections during the long pauses
+            # between emails, so reconnect once and retry if the copy fails.
+            if not save_copy(M, folder, msg, time.time()):
+                try:
+                    M.logout()
+                except Exception:
+                    pass
+                M = try_imap()
+                if M:
+                    print("      reconnected to IMAP, retrying copy")
+                    save_copy(M, folder, msg, time.time())
         print(f"  [{i}/{len(queue)}] {status}: {c['business']} <{c['email']}>")
 
         if i < len(queue) and not args.dry_run:
